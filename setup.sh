@@ -508,7 +508,7 @@ main() {
     apt_update_once && install_packages git
 
     # Hard-pinned commit SHA (update this when you push new code)
-    local PINNED_SHA="${AUTO_SCRIPT_PIN:-c50bafacurrentplaceholder}"
+    local PINNED_SHA="${AUTO_SCRIPT_PIN:-457f33b3abc5c4293528f1f29ed8d4eff26ac5bd}"
     local REPO_URL="https://github.com/mdr77m-star/AUTO-SCRIPT-v2.git"
 
     # Clone, checkout pinned commit, verify it matches
