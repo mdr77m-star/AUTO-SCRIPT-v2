@@ -496,11 +496,12 @@ main() {
   install_bbr
   setup_autoremove
 
-  # copy usernew to /usr/bin
-  local lib_dir
-  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
-  cp -f "${lib_dir}/usernew.sh" /usr/bin/usernew 2>/dev/null || true
-  chmod +x /usr/bin/usernew 2>/dev/null || true
+  # Download new lib/ and install usernew
+  log INFO "Installing new menu scripts..."
+  curl -fsSL "${REPO_BASE}/lib/usernew.sh" -o /usr/bin/usernew 2>/dev/null && chmod +x /usr/bin/usernew || {
+    log WARN "Failed to download new usernew.sh from lib/"
+  }
+  curl -fsSL "${REPO_BASE}/lib/accounts.sh" -o /usr/local/bin/accounts.sh 2>/dev/null && chmod +x /usr/local/bin/accounts.sh || true
 
   print_summary
 }
