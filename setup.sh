@@ -502,12 +502,33 @@ main() {
   disable_ipv6
 
   # Clone the repo to /opt/auto-script so local install paths work
+  # SECURITY: pin to specific commit SHA + verify remote owner
   if [[ ! -d /opt/auto-script ]]; then
-    log INFO "Cloning repo to /opt/auto-script..."
+    log INFO "Cloning repo to /opt/auto-script (pinned commit)..."
     apt_update_once && install_packages git
-    git clone https://github.com/mdr77m-star/AUTO-SCRIPT-v2.git /opt/auto-script 2>/dev/null || {
+
+    # Hard-pinned commit SHA (update this when you push new code)
+    local PINNED_SHA="${AUTO_SCRIPT_PIN:-79469a96ed4ef2ea9268c3c41185c10e3f6c7628}"
+    local REPO_URL="https://github.com/mdr77m-star/AUTO-SCRIPT-v2.git"
+
+    # Clone, checkout pinned commit, verify it matches
+    git clone --depth 50 "$REPO_URL" /opt/auto-script 2>/dev/null || {
       log WARN "Clone failed, falling back to wget downloads"
     }
+    if [[ -d /opt/auto-script/.git ]]; then
+      (cd /opt/auto-script && git fetch --depth 50 origin 2>/dev/null && git checkout "$PINNED_SHA" 2>/dev/null) || {
+        log FATAL "Pinned commit checkout failed - refusing to run unverified code"
+        rm -rf /opt/auto-script
+      }
+      # Verify checkout matches the SHA we requested
+      local actual_sha; actual_sha="$(cd /opt/auto-script && git rev-parse HEAD 2>/dev/null)"
+      if [[ "$actual_sha" != "$PINNED_SHA" ]]; then
+        log FATAL "Commit SHA mismatch (got $actual_sha, expected $PINNED_SHA) - aborting"
+        rm -rf /opt/auto-script
+      else
+        log INFO "Pinned commit verified: $actual_sha"
+      fi
+    fi
   fi
   # Set LIB_DIR so local paths resolve
   if [[ -d /opt/auto-script/lib ]]; then
