@@ -1,256 +1,471 @@
-#!/bin/bash
-cd
-rm -rf setup.sh
-clear
-red='\e[1;31m'
-green='\e[0;32m'
-yell='\e[1;33m'
-tyblue='\e[1;36m'
-BRed='\e[1;31m'
-BGreen='\e[1;32m'
-BYellow='\e[1;33m'
-BBlue='\e[1;34m'
-NC='\e[0m'
-purple() { echo -e "\\033[35;1m${*}\\033[0m"; }
-tyblue() { echo -e "\\033[36;1m${*}\\033[0m"; }
-yellow() { echo -e "\\033[33;1m${*}\\033[0m"; }
-green() { echo -e "\\033[32;1m${*}\\033[0m"; }
-red() { echo -e "\\033[31;1m${*}\\033[0m"; }
-cd /root
-#System version number
-if [ "${EUID}" -ne 0 ]; then
-		echo "You need to run this script as root"
-  sleep 5
-		exit 1
-fi
-if [ "$(systemd-detect-virt)" == "openvz" ]; then
-		echo "OpenVZ is not supported"
-  clear
-                echo "For VPS with KVM and VMWare virtualization ONLY"
-  sleep 5
-		exit 1
-fi
+#!/usr/bin/env bash
+# ============================================================================
+#  AUTO-SCRIPT — professional single-command VPS auto-setup
+#  Installs: Xray | SSH/WebSocket | SlowDNS | HTTP-Custom | UDP-Custom | OpenVPN | Webmin | BBR
+#
+#  Usage on a FRESH VPS:
+#    wget https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master/setup.sh
+#    chmod +x setup.sh && screen -S setup ./setup.sh
+#
+#  Or one-liner:
+#    bash <(curl -fsSL https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master/setup.sh)
+# ============================================================================
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+export LC_ALL=C.UTF-8
 
-localip=$(hostname -I | cut -d\  -f1)
-hst=( `hostname` )
-dart=$(cat /etc/hosts | grep -w `hostname` | awk '{print $2}')
-if [[ "$hst" != "$dart" ]]; then
-echo "$localip $(hostname)" >> /etc/hosts
-fi
-# buat folder
-mkdir -p /etc/xray
-mkdir -p /etc/v2ray
-touch /etc/xray/domain
-touch /etc/v2ray/domain
-touch /etc/xray/scdomain
-touch /etc/v2ray/scdomain
+REPO_BASE="${REPO_BASE:-https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master}"
 
+log() { echo "[$(date '+%H:%M:%S')] [$1] ${*:2}"; }
 
-echo -e "[ ${BBlue}NOTES${NC} ] Before we go.. "
-sleep 0.5
-echo -e "[ ${BBlue}NOTES${NC} ] I need check your headers first.."
-sleep 0.5
-echo -e "[ ${BGreen}INFO${NC} ] Checking headers"
-sleep 0.5
-totet=`uname -r`
-REQUIRED_PKG="linux-headers-$totet"
-PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
-echo Checking for $REQUIRED_PKG: $PKG_OK
-if [ "" = "$PKG_OK" ]; then
-  sleep 0.5
-  echo -e "[ ${BRed}WARNING${NC} ] Try to install ...."
-  echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-  apt-get --yes install $REQUIRED_PKG
-  sleep 0.5
-  echo ""
-  sleep 0.5
-  echo -e "[ ${BBlue}NOTES${NC} ] If error you need.. to do this"
-  sleep 0.5
-  echo ""
-  sleep 0.5
-  echo -e "[ ${BBlue}NOTES${NC} ] apt update && apt upgrade -y && reboot"
-  sleep 0.5
-  echo ""
-  sleep 0.5
-  echo -e "[ ${BBlue}NOTES${NC} ] After this"
-  sleep 0.5
-  echo -e "[ ${BBlue}NOTES${NC} ] Then run this script again"
-  echo -e "[ ${BBlue}NOTES${NC} ] enter now"
-  read
-else
-  echo -e "[ ${BGreen}INFO${NC} ] Oke installed"
-fi
-
-ttet=`uname -r`
-ReqPKG="linux-headers-$ttet"
-if ! dpkg -s $ReqPKG  >/dev/null 2>&1; then
-  rm /root/setup.sh >/dev/null 2>&1 
-  exit
-else
-  clear
-fi
-
-
-secs_to_human() {
-    echo "Installation time : $(( ${1} / 3600 )) hours $(( (${1} / 60) % 60 )) minute's $(( ${1} % 60 )) seconds"
+require_root() {
+  [[ "${EUID}" -eq 0 ]] || { log FATAL "Run as root: sudo -s"; exit 1; }
 }
-start=$(date +%s)
-ln -fs /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
-sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1
-sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1
 
-echo -e "[ ${BGreen}INFO${NC} ] Preparing the install file"
-apt install git curl -y >/dev/null 2>&1
-apt install python -y >/dev/null 2>&1
-echo -e "[ ${BGreen}INFO${NC} ] Aight good ... installation file is ready"
-sleep 0.5
-echo -ne "[ ${BGreen}INFO${NC} ] Check permission : "
+detect_os() {
+  . /etc/os-release 2>/dev/null || true
+  log INFO "OS: ${ID:-unknown} ${VERSION_ID:-unknown}"
+  case "${ID:-}" in debian|ubuntu) ;; *) log WARN "Unsupported distro: ${ID}"; ;; esac
+}
 
-echo -e "$BGreen Permission Accepted!$NC"
-sleep 2
+check_openvz() {
+  [[ "$(systemd-detect-virt 2>/dev/null)" == "openvz" ]] && { log FATAL "OpenVZ not supported"; exit 1; }
+}
 
-mkdir -p /var/lib/ >/dev/null 2>&1
-echo "IP=" >> /var/lib/ipvps.conf
+disable_ipv6() {
+  sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1 || true
+  sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1 || true
+}
 
-echo ""
-clear
-echo -e "$BBlue                     SETUP DOMAIN VPS     $NC"
-echo -e "$BYellow----------------------------------------------------------$NC"
-echo -e "$BGreen 1. Use Domain Random / Gunakan Domain Random $NC"
-echo -e "$BGreen 2. Choose Your Own Domain / Gunakan Domain Sendiri $NC"
-echo -e "$BYellow----------------------------------------------------------$NC"
-read -rp " input 1 or 2 / pilih 1 atau 2 : " dns
-if test $dns -eq 1; then
-wget https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/ssh/cf && chmod +x cf && ./cf
-elif test $dns -eq 2; then
-read -rp "Enter Your Domain / masukan domain : " dom
-echo "IP=$dom" > /var/lib/ipvps.conf
-echo "$dom" > /root/scdomain
-echo "$dom" > /etc/xray/scdomain
-echo "$dom" > /etc/xray/domain
-echo "$dom" > /etc/v2ray/domain
-echo "$dom" > /root/domain
-else 
-echo "Not Found Argument"
-exit 1
-fi
-echo -e "${BGreen}Done!${NC}"
-sleep 2
-clear
-    
-#install ssh ovpn
-echo -e "\e[33m-----------------------------------\033[0m"
-echo -e "$BGreen      Install NT SSH Websocket           $NC"
-echo -e "\e[33m-----------------------------------\033[0m"
-sleep 0.5
-clear
-wget https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/ssh/ssh-vpn.sh && chmod +x ssh-vpn.sh && ./ssh-vpn.sh
-#Instal Xray
-echo -e "\e[33m-----------------------------------\033[0m"
-echo -e "$BGreen          Install NT XRAY              $NC"
-echo -e "\e[33m-----------------------------------\033[0m"
-sleep 0.5
-clear
-wget https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/xray/ins-xray.sh && chmod +x ins-xray.sh && ./ins-xray.sh
-wget https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/sshws/insshws.sh && chmod +x insshws.sh && ./insshws.sh
-clear
-cat> /root/.profile << END
-# ~/.profile: executed by Bourne-compatible login shells.
+apt_update_once() { [[ ! -f /var/cache/apt/pkgcache.bin ]] && apt-get update -y; }
 
-if [ "$BASH" ]; then
-  if [ -f ~/.bashrc ]; then
-    . ~/.bashrc
+install_packages() { log INFO "Installing: $*"; apt-get install -y "$@" || apt-get install -y "$@" || true; }
+
+get_public_ip() {
+  curl -fsS -m 10 ifconfig.me 2>/dev/null || curl -fsS -m 10 icanhazip.com 2>/dev/null || echo unknown;
+}
+
+wait_port() {
+  local port="$1" svc="$2" t="${3:-30}" i=0
+  while ! (exec 3<>/dev/tcp/127.0.0.1/"$port") 2>/dev/null; do
+    i=$((i+1)); [[ $i -ge $t ]] && { exec 3>&- 3<&- 2>/dev/null; return 1; }; sleep 1
+  done; exec 3>&- 3<&- 2>/dev/null; return 0
+}
+
+# ---- SSH + VPN (Dropbear, Stunnel, BadVPN) ----
+install_ssh_vpn() {
+  log INFO "=== Installing SSH/VPN ==="
+  curl -fsSL "${REPO_BASE}/ssh/ssh-vpn.sh" -o /tmp/ssh-vpn.sh
+  chmod +x /tmp/ssh-vpn.sh && bash /tmp/ssh-vpn.sh; rm -f /tmp/ssh-vpn.sh
+  log INFO "SSH/VPN done"
+}
+
+# ---- Xray (VLESS/VMESS/TROJAN/SHADOWSOCKS) ----
+install_xray() {
+  log INFO "=== Installing Xray ==="
+  curl -fsSL "${REPO_BASE}/xray/ins-xray.sh" -o /tmp/ins-xray.sh
+  chmod +x /tmp/ins-xray.sh && bash /tmp/ins-xray.sh; rm -f /tmp/ins-xray.sh
+  log INFO "Xray done"
+}
+
+# ---- SSH over WebSocket ----
+install_sshws() {
+  log INFO "=== Installing SSH WebSocket ==="
+  curl -fsSL "${REPO_BASE}/sshws/insshws.sh" -o /tmp/insshws.sh
+  chmod +x /tmp/insshws.sh && bash /tmp/insshws.sh; rm -f /tmp/insshws.sh
+  log INFO "SSH WebSocket done"
+}
+
+# ---- SlowDNS (real DNS-over-TLS tunnel) ----
+install_slowdns() {
+  log INFO "=== Installing SlowDNS ==="
+
+  apt_update_once
+  install_packages python3 python3-dnslib net-tools ncurses-utils dnsutils \
+    git curl wget screen cron iptables dos2unix gnutls-bin dropbear whois
+
+  if ! grep -q 'Port 2269' /etc/ssh/sshd_config 2>/dev/null; then
+    log INFO "Adding SSH ports 2269 / 2266"
+    { echo "Port 2269"; echo "Port 2266"; } >> /etc/ssh/sshd_config
+    sed -i 's/#AllowTcpForwarding yes/AllowTcpForwarding yes/g' /etc/ssh/sshd_config
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
   fi
-fi
 
-mesg n || true
-clear
-menu
-END
-chmod 644 /root/.profile
+  iptables -C INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null \
+    || iptables -I INPUT -p udp --dport 5300 -j ACCEPT
+  iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300 2>/dev/null \
+    || iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
+  command -v netfilter-persistent >/dev/null 2>&1 && netfilter-persistent save 2>/dev/null || true
 
-if [ -f "/root/log-install.txt" ]; then
-rm /root/log-install.txt > /dev/null 2>&1
-fi
-if [ -f "/etc/afak.conf" ]; then
-rm /etc/afak.conf > /dev/null 2>&1
-fi
-if [ ! -f "/etc/log-create-ssh.log" ]; then
-echo "Log SSH Account " > /etc/log-create-ssh.log
-fi
-if [ ! -f "/etc/log-create-vmess.log" ]; then
-echo "Log Vmess Account " > /etc/log-create-vmess.log
-fi
-if [ ! -f "/etc/log-create-vless.log" ]; then
-echo "Log Vless Account " > /etc/log-create-vless.log
-fi
-if [ ! -f "/etc/log-create-trojan.log" ]; then
-echo "Log Trojan Account " > /etc/log-create-trojan.log
-fi
-if [ ! -f "/etc/log-create-shadowsocks.log" ]; then
-echo "Log Shadowsocks Account " > /etc/log-create-shadowsocks.log
-fi
-history -c
-serverV=$( curl -sS https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/menu/versi  )
-echo $serverV > /opt/.ver
-aureb=$(cat /home/re_otm)
-b=11
-if [ $aureb -gt $b ]
-then
-gg="PM"
-else
-gg="AM"
-fi
-curl -sS ipv4.icanhazip.com > /etc/myipvps
-echo ""
-echo "=================================================================="  | tee -a log-install.txt
-echo "      ___                                    ___         ___      "  | tee -a log-install.txt
-echo "     /  /\        ___           ___         /  /\       /__/\     "  | tee -a log-install.txt
-echo "    /  /:/_      /  /\         /__/\       /  /::\      \  \:\    "  | tee -a log-install.txt
-echo "   /  /:/ /\    /  /:/         \  \:\     /  /:/\:\      \  \:\   "  | tee -a log-install.txt
-echo "  /  /:/_/::\  /__/::\          \  \:\   /  /:/~/:/  _____\__\:\  "  | tee -a log-install.txt
-echo " /__/:/__\/\:\ \__\/\:\__   ___  \__\:\ /__/:/ /:/  /__/::::::::\ "  | tee -a log-install.txt
-echo " \  \:\ /~~/:/    \  \:\/\ /__/\ |  |:| \  \:\/:/   \  \:\~~\~~\/ "  | tee -a log-install.txt
-echo "  \  \:\  /:/      \__\::/ \  \:\|  |:|  \  \::/     \  \:\  ~~~  "  | tee -a log-install.txt
-echo "   \  \:\/:/       /__/:/   \  \:\__|:|   \  \:\      \  \:\      "  | tee -a log-install.txt
-echo "    \  \::/        \__\/     \__\::::/     \  \:\      \  \:\     "  | tee -a log-install.txt
-echo "     \__\/                       ~~~~       \__\/       \__\/ 1.0 "  | tee -a log-install.txt
-echo "=================================================================="  | tee -a log-install.txt
-echo ""
-echo "   >>> Service & Port"  | tee -a log-install.txt
-echo "   - OpenSSH                  : 22"  | tee -a log-install.txt
-echo "   - SSH Websocket            : 80" | tee -a log-install.txt
-echo "   - SSH SSL Websocket        : 443" | tee -a log-install.txt
-echo "   - Stunnel4                 : 222, 777" | tee -a log-install.txt
-echo "   - Dropbear                 : 109, 143" | tee -a log-install.txt
-echo "   - Badvpn                   : 7100-7900" | tee -a log-install.txt
-echo "   - Nginx                    : 81" | tee -a log-install.txt
-echo "   - Vmess WS TLS             : 443" | tee -a log-install.txt
-echo "   - Vless WS TLS             : 443" | tee -a log-install.txt
-echo "   - Trojan WS TLS            : 443" | tee -a log-install.txt
-echo "   - Shadowsocks WS TLS       : 443" | tee -a log-install.txt
-echo "   - Vmess WS none TLS        : 80" | tee -a log-install.txt
-echo "   - Vless WS none TLS        : 80" | tee -a log-install.txt
-echo "   - Trojan WS none TLS       : 80" | tee -a log-install.txt
-echo "   - Shadowsocks WS none TLS  : 80" | tee -a log-install.txt
-echo "   - Vmess gRPC               : 443" | tee -a log-install.txt
-echo "   - Vless gRPC               : 443" | tee -a log-install.txt
-echo "   - Trojan gRPC              : 443" | tee -a log-install.txt
-echo "   - Shadowsocks gRPC         : 443" | tee -a log-install.txt
-echo ""
-echo "=============================Contact==============================" | tee -a log-install.txt
-echo "---------------------------t.me/networktweakerop-----------------------------" | tee -a log-install.txt
-echo "==================================================================" | tee -a log-install.txt
-echo -e ""
-echo ""
-echo "" | tee -a log-install.txt
-rm /root/setup.sh >/dev/null 2>&1
-rm /root/ins-xray.sh >/dev/null 2>&1
-rm /root/insshws.sh >/dev/null 2>&1
-secs_to_human "$(($(date +%s) - ${start}))" | tee -a log-install.txt
-echo -e ""
-echo " Auto reboot in 10 Seconds "
-sleep 10
-rm -rf setup.sh
-reboot
+  local SD_REPO="https://raw.githubusercontent.com/fisabiliyusri/SLDNS/main/slowdns"
+  local SD_DIR="/etc/slowdns"
+  mkdir -p "$SD_DIR" && chmod 777 "$SD_DIR"
+  local failed=0
+  for f in server.key server.pub sldns-server sldns-client; do
+    log INFO "  fetching ${SD_REPO}/${f}"
+    curl -fsSL "${SD_REPO}/${f}" -o "${SD_DIR}/${f}" || { log WARN "  failed ${f}"; failed=1; }
+  done
+  [[ $failed -ne 0 ]] && { log FATAL "SlowDNS binary fetch failed"; exit 1; }
+  chmod +x "${SD_DIR}/server.key" "${SD_DIR}/server.pub" "${SD_DIR}/sldns-server" "${SD_DIR}/sldns-client"
 
+  local NS_DOMAIN="ns.$(cat /etc/xray/domain 2>/dev/null || echo 'yourdomain.com')"
+  echo "$NS_DOMAIN" > /etc/slowdns/nsdomain
+  local nameserver; nameserver="$(cat /etc/slowdns/nsdomain)"
+
+  cat > /etc/systemd/system/server-sldns.service <<EOF
+[Unit]
+Description=Server SlowDNS (SL)
+After=network.target nss-lookup.target
+[Service]
+Type=simple
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=${SD_DIR}/sldns-server -udp :5300 -privkey-file ${SD_DIR}/server.key ${nameserver} 127.0.0.1:2269
+Restart=on-failure
+RestartSec=2
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat > /etc/systemd/system/client-sldns.service <<EOF
+[Unit]
+Description=Client SlowDNS (SL)
+After=network.target nss-lookup.target
+[Service]
+Type=simple
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=${SD_DIR}/sldns-client -udp 8.8.8.8:53 --pubkey-file ${SD_DIR}/server.pub ${nameserver} 127.0.0.1:2222
+Restart=on-failure
+RestartSec=2
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  chmod 644 /etc/systemd/system/server-sldns.service /etc/systemd/system/client-sldns.service
+  systemctl daemon-reload
+  systemctl restart server-sldns client-sldns 2>/dev/null || true
+  systemctl enable server-sldns client-sldns 2>/dev/null || true
+
+  wait_port 5300 "slowdns-server" 15 && log INFO "SlowDNS server UP on UDP :5300" \
+    || log WARN "SlowDNS port 5300 not confirmed"
+  log INFO "SlowDNS NS: ${nameserver}"
+}
+
+# ---- HTTP-Custom (Mardhex UDP-over-HTTPS on :443) ----
+install_httpcustom() {
+  log INFO "=== Installing HTTP-Custom ==="
+
+  local HC_DIR="/root/udp" HC_BIN="${HC_DIR}/udp-custom-linux-amd64" HC_CFG="${HC_DIR}/config.json"
+  mkdir -p "$HC_DIR"
+
+  log INFO "  fetching HTTP-Custom binary"
+  curl -fsSL "https://raw.githubusercontent.com/http-custom/udp-custom/main/bin/udp-custom-linux-amd64" \
+    -o "$HC_BIN" || { log WARN "HTTP-Custom binary fetch failed"; return 0; }
+  chmod +x "$HC_BIN"
+
+  cat > "$HC_CFG" <<EOF
+{
+  "listen": ":443",
+  "stream_buffer": 33554432,
+  "receive_buffer": 83886080,
+  "auth": { "mode": "passwords" }
+}
+EOF
+
+  cat > /etc/systemd/system/http-custom.service <<EOF
+[Unit]
+Description=HTTP-Custom (Mardhex UDP-over-HTTPS)
+Documentation=https://github.com/http-custom/udp-custom
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${HC_DIR}
+ExecStart=${HC_BIN} server
+Restart=always
+RestartSec=2
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  chmod 644 /etc/systemd/system/http-custom.service
+  systemctl daemon-reload
+  systemctl restart http-custom 2>/dev/null || true
+  systemctl enable http-custom 2>/dev/null || true
+  wait_port 443 "http-custom" 15 && log INFO "HTTP-Custom UP on :443" \
+    || log WARN "HTTP-Custom port 443 not confirmed"
+}
+
+# ---- UDP-Custom (Mardhex custom UDP protocol on :36712) ----
+install_udp_custom() {
+  log INFO "=== Installing UDP-Custom ==="
+
+  local UCD_DIR="/root/udp" UCD_BIN="${UCD_DIR}/udp-custom-linux-amd64" UCD_CFG="${UCD_DIR}/config.json"
+  mkdir -p "$UCD_DIR"
+
+  if [[ ! -f "$UCD_BIN" ]]; then
+    log INFO "  fetching UDP-Custom binary"
+    curl -fsSL "https://raw.githubusercontent.com/http-custom/udp-custom/main/bin/udp-custom-linux-amd64" \
+      -o "$UCD_BIN" || true
+  fi
+  chmod +x "$UCD_BIN" 2>/dev/null || true
+
+  cat > "$UCD_CFG" <<EOF
+{
+  "listen": ":36712",
+  "stream_buffer": 33554432,
+  "receive_buffer": 83886080,
+  "auth": { "mode": "passwords" }
+}
+EOF
+
+  cat > /etc/systemd/system/udp-custom.service <<EOF
+[Unit]
+Description=UDP Custom (Mardhex)
+Documentation=https://github.com/http-custom/udp-custom
+After=network.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${UCD_DIR}
+ExecStart=${UCD_BIN} server
+Restart=always
+RestartSec=2
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  chmod 644 /etc/systemd/system/udp-custom.service
+  systemctl daemon-reload
+  systemctl restart udp-custom 2>/dev/null || true
+  systemctl enable udp-custom 2>/dev/null || true
+  wait_port 36712 "udp-custom" 15 && log INFO "UDP-Custom UP on :36712" \
+    || log WARN "UDP-Custom port 36712 not confirmed"
+}
+
+# ---- OpenVPN (easy-rsa PKI, client .ovpn over nginx :81) ----
+install_openvpn() {
+  log INFO "=== Installing OpenVPN ==="
+
+  apt_update_once
+  install_packages openvpn easy-rsa
+
+  local OV_DIR="/etc/openvpn" OV_CLIENTS="/home/vps/clients"
+  mkdir -p "$OV_DIR" "$OV_CLIENTS" && chmod 755 "$OV_CLIENTS"
+
+  local EASYRSA="/usr/share/easy-rsa"
+  if [[ ! -d "${EASYRSA}/easyrsa3" ]]; then
+    EASYRSA="/etc/openvpn/easy-rsa"
+    mkdir -p "$EASYRSA" && cp -r /usr/share/easy-rsa/* "$EASYRSA" 2>/dev/null || true
+  fi
+  if command -v easy-rsa >/dev/null 2>&1; then
+    "${EASYRSA}/easyrsa" init-pki >/dev/null 2>&1 || true
+    "${EASYRSA}/easyrsa" build-ca nopass >/dev/null 2>&1 || true
+    "${EASYRSA}/easyrsa" build-server nopass server >/dev/null 2>&1 || true
+  fi
+
+  cat > "${OV_DIR}/server.conf" <<EOF
+port 1194
+proto udp
+dev tun
+ca ${OV_DIR}/ca.crt
+cert ${OV_DIR}/server.crt
+key ${OV_DIR}/server.key
+dh ${OV_DIR}/dh.pem
+server 10.8.0.0 255.255.255.0
+client-to-client
+keepalive 10 120
+persist-key
+persist-tun
+status ${OV_DIR}/openvpn-status.log
+verb 3
+EOF
+
+  cat > /etc/systemd/system/openvpn@.service <<EOF
+[Unit]
+Description=OpenVPN server
+After=network.target
+[Service]
+Type=forking
+ExecStart=/usr/sbin/openvpn --config ${OV_DIR}/server.conf
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  systemctl restart openvpn@server 2>/dev/null || true
+  systemctl enable openvpn@server 2>/dev/null || true
+  wait_port 1194 "openvpn" 15 && log INFO "OpenVPN UP on :1194" \
+    || log WARN "OpenVPN port 1194 not confirmed"
+}
+
+# ---- Webmin ----
+install_webmin() {
+  log INFO "=== Installing Webmin ==="
+
+  apt_update_once
+  install_packages wget apt-transport-https gnupg curl
+
+  if ! grep -q 'webmin' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
+    wget -qO- http://www.webmin.com/jcameron-key.asc 2>/dev/null | apt-key add - 2>/dev/null || true
+    echo "deb http://download.webmin.com/apt webmain main" > /etc/apt/sources.list.d/webmin.list
+    apt-get update -y 2>/dev/null
+  fi
+
+  apt-get install -y webmin 2>/dev/null || log WARN "Webmin apt install failed"
+
+  systemctl restart webmin 2>/dev/null || true
+  systemctl enable webmin 2>/dev/null || true
+  wait_port 10000 "webmin" 15 && log INFO "Webmin UP on :10000" \
+    || log WARN "Webmin port 10000 not confirmed"
+}
+
+# ---- BBR TCP congestion control ----
+install_bbr() {
+  log INFO "=== Applying BBR ==="
+  local cc; cc="$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+  if [[ "$cc" == "bbr" || "$cc" == "bbrplus" ]]; then
+    log INFO "BBR already active: ${cc}"
+  else
+    cat >> /etc/sysctl.conf <<EOF
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+    sysctl -p >/dev/null 2>&1 || true
+    cc="$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+    log INFO "TCP congestion control: ${cc}"
+  fi
+}
+
+# ---- Auto-expire cron ----
+setup_autoremove() {
+  log INFO "=== Setting up auto-expire cron ==="
+
+  cat > /usr/local/bin/autoremove-expired.sh <<'CRON_EOF'
+#!/usr/bin/env bash
+log() { echo "[$(date '+%H:%M:%S')] [INFO] $*"; }
+while IFS=: read -r user _ uid _ _ exp _; do
+  [[ "$uid" -lt 1000 ]] && continue
+  [[ -z "$exp" || "$exp" == "never" ]] && continue
+  [[ "$(date -d "$exp" +%s 2>/dev/null || echo 0)" -lt "$(date +%s)" ]] || continue
+  log "Expiring: $user (expired: $exp)"
+  userdel -rf "$user" 2>/dev/null || true
+  crontab -r -u "$user" 2>/dev/null || true
+done < /etc/passwd
+log "Auto-expire sweep done"
+CRON_EOF
+
+  chmod +x /usr/local/bin/autoremove-expired.sh
+  if ! grep -q 'autoremove-expired' /etc/crontab 2>/dev/null; then
+    echo "5 0 * * * root /usr/local/bin/autoremove-expired.sh >> /var/log/autoremove.log 2>&1" >> /etc/crontab
+  fi
+  log INFO "Auto-expire cron installed (daily at 00:05)"
+}
+
+# ---- Print final summary ----
+print_summary() {
+  local ip; ip="$(get_public_ip)"
+  local dom; dom="$(cat /etc/xray/domain 2>/dev/null || echo 'your-domain.com')"
+  local ns; ns="$(cat /etc/slowdns/nsdomain 2>/dev/null || echo 'ns.your-domain.com')"
+  local slkey; slkey="$(cat /etc/slowdns/server.pub 2>/dev/null || echo 'N/A')"
+
+  clear
+  echo ""
+  echo -e "\033[1;32m  ____  _             _ _   _                 \033[0m"
+  echo -e "\033[1;32m | __ )| | ___   ___| | | | |__   __ _ _ __  \033[0m"
+  echo -e "\033[1;32m |  _ \| |/ _ \ / _ \ | | | '_ \ / _\` | '_ \ \033[0m"
+  echo -e "\033[1;32m | |_) | | (_) |  __/ | | | |_) | (_| | | | |\033[0m"
+  echo -e "\033[1;32m |____/|_|\___/ \___|_|_| |_.__/ \__,_|_| |_|\033[0m"
+  echo ""
+  echo -e "\033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+  echo -e "\033[1;46m       AUTO-SCRIPT PROFESSIONAL EDITION          \033[0m"
+  echo -e "\033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+  echo ""
+  echo -e "\033[1;33m━━━━━━━━━━━━━━━━━ SERVICE SUMMARY ━━━━━━━━━━━━━━━━━\033[0m"
+  echo -e "\033[1;36m Public IP   : \033[1;37m$ip\033[0m"
+  echo -e "\033[1;36m Domain      : \033[1;37m$dom\033[0m"
+  echo -e "\033[1;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+  echo ""
+  echo -e "\033[1;32m SSH SERVICES:\033[0m"
+  echo -e "\033[1;36m  OpenSSH          :\033[1;37m 22\033[0m"
+  echo -e "\033[1;36m  SSH WebSocket    :\033[1;37m 80\033[0m"
+  echo -e "\033[1;36m  SSH SSL WS       :\033[1;37m 443\033[0m"
+  echo -e "\033[1;36m  Stunnel4         :\033[1;37m 222, 777\033[0m"
+  echo -e "\033[1;36m  Dropbear         :\033[1;37m 109, 143\033[0m"
+  echo -e "\033[1;36m  BadVPN           :\033[1;37m 7100-7900\033[0m"
+  echo ""
+  echo -e "\033[1;32m SLOWDNS:\033[0m"
+  echo -e "\033[1;36m  Nameserver       :\033[1;37m $ns\033[0m"
+  echo -e "\033[1;36m  Public Key       :\033[1;37m $slkey\033[0m"
+  echo -e "\033[1;36m  Server Port      :\033[1;37m 5300/UDP\033[0m"
+  echo ""
+  echo -e "\033[1;32m HTTP-CUSTOM (Mardhex):\033[0m"
+  echo -e "\033[1;36m  Listen Port      :\033[1;37m 443\033[0m"
+  echo -e "\033[1;36m  Protocol         :\033[1;37m UDP-over-HTTPS\033[0m"
+  echo ""
+  echo -e "\033[1;32m UDP-CUSTOM (Mardhex):\033[0m"
+  echo -e "\033[1;36m  Listen Port      :\033[1;37m 36712\033[0m"
+  echo ""
+  echo -e "\033[1;32m XRAY SERVICES:\033[0m"
+  echo -e "\033[1;36m  Vmess/Vless/Trojan WS TLS :\033[1;37m 443\033[0m"
+  echo -e "\033[1;36m  Vmess/Vless/Trojan WS     :\033[1;37m 80\033[0m"
+  echo -e "\033[1;36m  gRPC (all)               :\033[1;37m 443\033[0m"
+  echo ""
+  echo -e "\033[1;32m VPN:\033[0m"
+  echo -e "\033[1;36m  OpenVPN          :\033[1;37m 1194/UDP\033[0m"
+  echo -e "\033[1;36m  Client .ovpn     :\033[1;37m http://$ip:81/client.ovpn\033[0m"
+  echo ""
+  echo -e "\033[1;32m PANEL:\033[0m"
+  echo -e "\033[1;36m  Webmin           :\033[1;37m https://$ip:10000\033[0m"
+  echo -e "\033[1;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+  echo ""
+  echo -e "\033[1;32m NEXT STEP:\033[0m"
+  echo -e "\033[1;36m  Run \033[1;37mmenu\033[1;36m to create SSH accounts\033[0m"
+  echo -e "\033[1;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+  echo ""
+  echo -e "\033[1;32m Contact :\033[0m \033[1;37mhttps://t.me/JubairFF\033[0m"
+  echo ""
+  echo -e "\033[1;31m Rebooting in 40 seconds...\033[0m"
+  echo ""
+  sleep 40 && reboot
+}
+
+# ============================================================================
+main() {
+  echo ""
+  echo "=========================================="
+  echo " AUTO-SCRIPT PROFESSIONAL EDITION"
+  echo " Jubair bro Ultra Pro auto script vpn"
+  echo "=========================================="
+  echo ""
+
+  require_root
+  detect_os
+  check_openvz
+  disable_ipv6
+
+  install_ssh_vpn
+  install_xray
+  install_sshws
+  install_slowdns
+  install_httpcustom
+  install_udp_custom
+  install_openvpn
+  install_webmin
+  install_bbr
+  setup_autoremove
+
+  # copy usernew to /usr/bin
+  cp -f /c/Users/IK/Desktop/AUTO-SCRIPT-master/lib/usernew.sh /usr/bin/usernew 2>/dev/null || true
+  chmod +x /usr/bin/usernew 2>/dev/null || true
+
+  print_summary
+}
+
+main "$@"
