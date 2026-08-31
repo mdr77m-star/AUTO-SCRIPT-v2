@@ -26,7 +26,11 @@
 - (Recommendation) Ubuntu 18 / 20 LTS (STABLE to use)
 <br>
 
+<<<<<<< HEAD
 # Cloudflare settings for those who have their own Domain, you can check at folder [image](https://github.com/mdr77m-star/AUTO-SCRIPT/tree/master/image) to display other settings
+=======
+# Cloudflare settings for those who have their own Domain, you can check at folder [image](https://github.com/jubairbro/AUTO-SCRIPT/tree/master/image) to display other settings
+>>>>>>> 6d827ca (feat: ...)
 <br>
 - SSL/TLS : FULL<br>
 - SSL/TLS Recommender : OFF<br>
@@ -37,7 +41,11 @@
 <br>
 
 # Pointing
+<<<<<<< HEAD
 ![Pointing](https://github.com/mdr77m-star/AUTO-SCRIPT/blob/master/image/pointing.png)
+=======
+![Pointing](https://github.com/jubairbro/AUTO-SCRIPT/blob/master/image/pointing.png)
+>>>>>>> 6d827ca (feat: ...)
 
 ## Service & Port:
 <br>
@@ -74,6 +82,7 @@
 - no auto backup? which... is permanently removed
 - Just accept the existing features / you can add them yourself manually
 - Additional Features (Optional) skipper (NOTE) install after [Step Install] is complete
+<<<<<<< HEAD
 - Optional [install OpenVPN + Slowdns +](https://github.com/mdr77m-star/AUTO-SCRIPT/tree/master/udp-custom) UDP-Custom by [Exe302](https://gitlab.com/Exe302) + Slowdns by [SL](https://github.com/fisabiliyusri)
 - Optional [install Panel Webmin + ADS Block](https://github.com/mdr77m-star/AUTO-SCRIPT/tree/master/helium) Helium version 3.0 by [Abi Darwish](https://github.com/abidarwish)
 - Optional [install Bot Telegram Xolpanel](https://github.com/mdr77m-star/AUTO-SCRIPT/tree/master/bot%20telegram%20panel) by [XolvaID](https://github.com/XolvaID)
@@ -83,6 +92,17 @@
 
 # Service Status
 ![Service Status](https://github.com/mdr77m-star/AUTO-SCRIPT/blob/master/image/service1.png)
+=======
+- Optional [install OpenVPN + Slowdns +](https://github.com/jubairbro/AUTO-SCRIPT/tree/master/udp-custom) UDP-Custom by [Exe302](https://gitlab.com/Exe302) + Slowdns by [SL](https://github.com/fisabiliyusri)
+- Optional [install Panel Webmin + ADS Block](https://github.com/jubairbro/AUTO-SCRIPT/tree/master/helium) Helium version 3.0 by [Abi Darwish](https://github.com/abidarwish)
+- Optional [install Bot Telegram Xolpanel](https://github.com/jubairbro/AUTO-SCRIPT/tree/master/bot%20telegram%20panel) by [XolvaID](https://github.com/XolvaID)
+  
+# Menu
+![Service Status](https://github.com/jubairbro/AUTO-SCRIPT/blob/master/image/menu1.png)
+
+# Service Status
+![Service Status](https://github.com/jubairbro/AUTO-SCRIPT/blob/master/image/service1.png)
+>>>>>>> 6d827ca (feat: ...)
 
 # [Step Install]
 - Step 1 for (debian) please update first
@@ -91,7 +111,11 @@ apt update && apt upgrade -y && reboot
 ```
 - Step 2 for (ubuntu) directly install
 ```
+<<<<<<< HEAD
 sysctl -w net.ipv6.conf.all.disable_ipv6=1 && sysctl -w net.ipv6.conf.default.disable_ipv6=1 && apt update && apt install -y bzip2 gzip coreutils screen curl unzip && wget https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/setup1.sh && chmod +x setup1.sh && sed -i -e 's/\r$//' setup1.sh && screen -S setup ./setup1.sh
+=======
+sysctl -w net.ipv6.conf.all.disable_ipv6=1 && sysctl -w net.ipv6.conf.default.disable_ipv6=1 && apt update && apt install -y bzip2 gzip coreutils screen curl unzip && wget https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master/setup1.sh && chmod +x setup1.sh && sed -i -e 's/\r$//' setup1.sh && screen -S setup ./setup1.sh
+>>>>>>> 6d827ca (feat: ...)
 ```
 
 # Telegram

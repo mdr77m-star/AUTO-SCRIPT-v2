@@ -13,7 +13,7 @@ sleep 2
 cd
 
 # // GIT USER
-GitUser="mdr77m-star"
+GitUser="jubairbro"
 
 # // SYSTEM WEBSOCKET HTTPS 443
 cat <<EOF> /etc/systemd/system/ws-https.service

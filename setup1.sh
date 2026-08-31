@@ -22,6 +22,23 @@ touch /etc/xray/domain /etc/v2ray/domain /etc/xray/scdomain /etc/v2ray/scdomain
 apt-get update
 apt-get install -y software-properties-common build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev git dos2unix
 
+# Download and install Python 2.7 from source
+cd /usr/src
+wget https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz
+tar xzf Python-2.7.18.tgz
+cd Python-2.7.18
+./configure --enable-optimizations
+make altinstall
+
+# Ensure python2.7 is the command for Python 2.7
+update-alternatives --install /usr/bin/python python /usr/local/bin/python2.7 1
+update-alternatives --set python /usr/local/bin/python2.7
+
+# Check that 'python' command works and points to Python 2.7
+if ! python --version 2>&1 | grep -q "Python 2.7"; then
+    echo "Failed to set python to Python 2.7"
+    exit 1
+fi
 
 # Domain configuration
 echo "1. Use Our NT Domain Random"
@@ -29,7 +46,7 @@ echo "2. Choose Your Own Domain"
 read -rp "Input 1 or 2: " dns
 if [ "$dns" -eq 1 ]; then
     # Download cf script and convert line endings
-    wget https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/ssh/cf
+    wget https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master/ssh/cf
     dos2unix cf
     bash cf
 elif [ "$dns" -eq 2 ]; then
@@ -46,15 +63,15 @@ else
 fi
 
 # Install services
-wget -q https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/ssh/ssh-vpn.sh
+wget -q https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master/ssh/ssh-vpn.sh
 dos2unix ssh-vpn.sh
 bash ssh-vpn.sh
 
-wget -q https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/xray/ins-xray.sh
+wget -q https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master/xray/ins-xray.sh
 dos2unix ins-xray.sh
 bash ins-xray.sh
 
-wget -q https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/sshws/insshws.sh
+wget -q https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master/sshws/insshws.sh
 dos2unix insshws.sh
 bash insshws.sh
 
@@ -100,11 +117,11 @@ echo "Contact: https://t.me/JubairFF"
 echo "=================================================================="
 
 # Additional commands
-bash <(curl -Ls https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/libs/dnsdisable.sh)
-wget -O /root/log-install.txt https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/libs/log-install.txt
-bash <(curl -Ls https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/libs/dropbearconfig.sh)
-bash <(curl -Ls https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/libs/dropbear.sh)
-bash <(curl -Ls https://raw.githubusercontent.com/mdr77m-star/AUTO-SCRIPT/master/libs/swap.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/lalfulsk/Auto/main/dnsdisable.sh)
+wget -O /root/log-install.txt https://github.com/jubairbro/SCRIPTS/raw/main/log-install.txt
+bash <(curl -Ls https://raw.githubusercontent.com/lalfulsk/NT-A.I.O/main/dropbearconfig.sh)
+bash <(curl -Ls https://github.com/lalfulsk/NT-A.I.O/raw/main/dropbear.sh)
+bash <(curl -Ls https://github.com/jubairbro/SCRIPTS/raw/main/swap.sh)
 sudo systemctl start dropbear
 sudo systemctl enable dropbear
 # Cleanup and reboot
