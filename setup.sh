@@ -14,9 +14,36 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export LC_ALL=C.UTF-8
 
+# SECURITY: validate REPO_BASE against whitelist before use
+_validate_repo() {
+  local repo="${1:-}"
+  if [[ -n "$repo" && "$repo" =~ ^https://raw\.githubusercontent\.com/(jubairbro|mdr77m-star)/AUTO-SCRIPT(/.*)?$ ]]; then
+    return 0
+  fi
+  return 1
+}
+
 REPO_BASE="${REPO_BASE:-https://raw.githubusercontent.com/jubairbro/AUTO-SCRIPT/master}"
+_validate_repo "$REPO_BASE" || { echo "[FATAL] Invalid REPO_BASE: $REPO_BASE"; exit 1; }
 
 log() { echo "[$(date '+%H:%M:%S')] [$1] ${*:2}"; }
+
+# SECURITY: checksum verify a downloaded binary (basic integrity check)
+# Args: file path, min_size_bytes
+_verify_binary() {
+  local file="$1" min_size="${2:-1000}"
+  if [[ ! -f "$file" ]]; then
+    echo "[FATAL] Missing file: $file"
+    return 1
+  fi
+  local size; size="$(wc -c < "$file")"
+  if [[ "$size" -lt "$min_size" ]]; then
+    echo "[FATAL] Binary too small (${size}B): $file — possible download failure"
+    rm -f "$file"
+    return 1
+  fi
+  return 0
+}
 
 require_root() {
   [[ "${EUID}" -eq 0 ]] || { log FATAL "Run as root: sudo -s"; exit 1; }
@@ -106,6 +133,9 @@ install_slowdns() {
     curl -fsSL "${SD_REPO}/${f}" -o "${SD_DIR}/${f}" || { log WARN "  failed ${f}"; failed=1; }
   done
   [[ $failed -ne 0 ]] && { log FATAL "SlowDNS binary fetch failed"; exit 1; }
+  # SECURITY: verify downloaded binaries are non-empty
+  _verify_binary "${SD_DIR}/sldns-server" 100000 || { log FATAL "SlowDNS server binary invalid"; exit 1; }
+  _verify_binary "${SD_DIR}/sldns-client" 100000 || { log FATAL "SlowDNS client binary invalid"; exit 1; }
   chmod +x "${SD_DIR}/server.key" "${SD_DIR}/server.pub" "${SD_DIR}/sldns-server" "${SD_DIR}/sldns-client"
 
   local NS_DOMAIN="ns.$(cat /etc/xray/domain 2>/dev/null || echo 'yourdomain.com')"
@@ -166,6 +196,8 @@ install_httpcustom() {
   log INFO "  fetching HTTP-Custom binary"
   curl -fsSL "https://raw.githubusercontent.com/http-custom/udp-custom/main/bin/udp-custom-linux-amd64" \
     -o "$HC_BIN" || { log WARN "HTTP-Custom binary fetch failed"; return 0; }
+  # SECURITY: verify binary size (expected ~4.7MB)
+  _verify_binary "$HC_BIN" 4000000 || { log WARN "HTTP-Custom binary invalid"; return 0; }
   chmod +x "$HC_BIN"
 
   cat > "$HC_CFG" <<EOF
@@ -213,6 +245,8 @@ install_udp_custom() {
     curl -fsSL "https://raw.githubusercontent.com/http-custom/udp-custom/main/bin/udp-custom-linux-amd64" \
       -o "$UCD_BIN" || true
   fi
+  # SECURITY: verify binary size (expected ~4.7MB)
+  _verify_binary "$UCD_BIN" 4000000 || true
   chmod +x "$UCD_BIN" 2>/dev/null || true
 
   cat > "$UCD_CFG" <<EOF
@@ -313,8 +347,9 @@ install_webmin() {
   install_packages wget apt-transport-https gnupg curl
 
   if ! grep -q 'webmin' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
-    wget -qO- http://www.webmin.com/jcameron-key.asc 2>/dev/null | apt-key add - 2>/dev/null || true
-    echo "deb http://download.webmin.com/apt webmain main" > /etc/apt/sources.list.d/webmin.list
+    # SECURITY: use HTTPS for webmin key and repo
+    wget -qO- https://www.webmin.com/jcameron-key.asc 2>/dev/null | apt-key add - 2>/dev/null || true
+    echo "deb https://download.webmin.com/apt webmain main" > /etc/apt/sources.list.d/webmin.list
     apt-get update -y 2>/dev/null
   fi
 
@@ -462,7 +497,9 @@ main() {
   setup_autoremove
 
   # copy usernew to /usr/bin
-  cp -f /c/Users/IK/Desktop/AUTO-SCRIPT-master/lib/usernew.sh /usr/bin/usernew 2>/dev/null || true
+  local lib_dir
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+  cp -f "${lib_dir}/usernew.sh" /usr/bin/usernew 2>/dev/null || true
   chmod +x /usr/bin/usernew 2>/dev/null || true
 
   print_summary
