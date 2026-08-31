@@ -501,6 +501,20 @@ main() {
   check_openvz
   disable_ipv6
 
+  # Clone the repo to /opt/auto-script so local install paths work
+  if [[ ! -d /opt/auto-script ]]; then
+    log INFO "Cloning repo to /opt/auto-script..."
+    apt_update_once && install_packages git
+    git clone https://github.com/mdr77m-star/AUTO-SCRIPT-v2.git /opt/auto-script 2>/dev/null || {
+      log WARN "Clone failed, falling back to wget downloads"
+    }
+  fi
+  # Set LIB_DIR so local paths resolve
+  if [[ -d /opt/auto-script/lib ]]; then
+    LIB_DIR="/opt/auto-script/lib"
+    export LIB_DIR
+  fi
+
   install_ssh_vpn
   install_xray
   install_sshws
