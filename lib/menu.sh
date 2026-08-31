@@ -33,8 +33,24 @@ show_menu() {
   case "$opt" in
     1) usernew ;;
     2) bash /usr/bin/accounts.sh summary 2>/dev/null || { echo "(no accounts)"; sleep 2; }; ;;
-    3) read -rp "Username to delete: " u; userdel -rf "$u" 2>/dev/null && echo "Deleted: $u" || echo "Not found"; sleep 2; ;;
-    4) read -rp "Username to renew: " u; read -rp "Days to add: " d; chage -E "$(date -d "+$d days" +%Y-%m-%d)" "$u" 2>/dev/null && echo "Renewed: $u (+$d days)" || echo "Failed"; sleep 2; ;;
+    3) read -rp "Username to delete: " u
+       # SECURITY: validate username matches POSIX safe pattern
+       if [[ "$u" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+         userdel -rf "$u" 2>/dev/null && echo "Deleted: $u" || echo "Not found"
+       else
+         echo "Invalid username"
+       fi
+       sleep 2 ;;
+    4) read -rp "Username to renew: " u
+       read -rp "Days to add: " d
+       # SECURITY: validate inputs strictly
+       if [[ "$u" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && [[ "$d" =~ ^[0-9]+$ ]]; then
+         local exp_date; exp_date="$(date -d "+${d} days" +%Y-%m-%d)"
+         chage -E "$exp_date" "$u" 2>/dev/null && echo "Renewed: $u (+$d days)" || echo "Failed"
+       else
+         echo "Invalid username or days"
+       fi
+       sleep 2 ;;
     5) bash /usr/bin/usernew --info 2>/dev/null || echo "Run: usernew (no args) to create, or check /etc/slowdns/server.pub"; sleep 3; ;;
     6) bash /usr/bin/running 2>/dev/null || { echo "Services:"; systemctl list-units --type=service --state=running --no-pager 2>/dev/null | head -20; }; ;;
     7) echo "Rebooting..."; sleep 2; /sbin/reboot; ;;
