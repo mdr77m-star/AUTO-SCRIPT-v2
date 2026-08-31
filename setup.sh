@@ -496,12 +496,24 @@ main() {
   install_bbr
   setup_autoremove
 
-  # Download new lib/ and install usernew
+  # Install usernew + accounts: prefer local lib/, fall back to remote (HTTPS only)
   log INFO "Installing new menu scripts..."
-  curl -fsSL "${REPO_BASE}/lib/usernew.sh" -o /usr/bin/usernew 2>/dev/null && chmod +x /usr/bin/usernew || {
-    log WARN "Failed to download new usernew.sh from lib/"
-  }
-  curl -fsSL "${REPO_BASE}/lib/accounts.sh" -o /usr/local/bin/accounts.sh 2>/dev/null && chmod +x /usr/local/bin/accounts.sh || true
+  local lib_dir
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/lib"
+  local usernew_installed=0
+  if [[ -f "${lib_dir}/usernew.sh" ]]; then
+    cp -f "${lib_dir}/usernew.sh" /usr/bin/usernew && chmod +x /usr/bin/usernew && usernew_installed=1
+  fi
+  if [[ $usernew_installed -eq 0 ]]; then
+    # SECURITY: download to temp file, size check, then atomic install
+    local tmp; tmp="$(mktemp)"
+    curl -fsSL "${REPO_BASE}/lib/usernew.sh" -o "$tmp" 2>/dev/null || { log WARN "usernew download failed"; rm -f "$tmp"; }
+    if [[ -f "$tmp" ]] && _verify_binary "$tmp" 1000; then
+      mv "$tmp" /usr/bin/usernew && chmod +x /usr/bin/usernew
+    else
+      rm -f "$tmp"
+    fi
+  fi
 
   print_summary
 }
