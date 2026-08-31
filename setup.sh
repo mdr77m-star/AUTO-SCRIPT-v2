@@ -79,28 +79,44 @@ wait_port() {
   done; exec 3>&- 3<&- 2>/dev/null; return 0
 }
 
-# ---- SSH + VPN (Dropbear, Stunnel, BadVPN) ----
+# ---- SSH + VPN stack: pure local install (no remote dependencies) ----
 install_ssh_vpn() {
-  log INFO "=== Installing SSH/VPN ==="
-  curl -fsSL "${REPO_BASE}/ssh/ssh-vpn.sh" -o /tmp/ssh-vpn.sh
-  chmod +x /tmp/ssh-vpn.sh && bash /tmp/ssh-vpn.sh; rm -f /tmp/ssh-vpn.sh
-  log INFO "SSH/VPN done"
+  log INFO "=== Installing SSH/VPN stack (local) ==="
+  local ssh_dir="${LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/lib}/../ssh"
+  local t; t="$(mktemp)"
+  if [[ -f "${ssh_dir}/ssh-vpn.sh" ]]; then
+    cp -f "${ssh_dir}/ssh-vpn.sh" "$t" && bash "$t" && log INFO "SSH/VPN done"
+  else
+    # fallback to remote (only from THIS repo, not jubairbro)
+    curl -fsSL "${REPO_BASE}/ssh/ssh-vpn.sh" -o "$t" && bash "$t" && log INFO "SSH/VPN done (remote)"
+  fi
+  rm -f "$t"
 }
 
-# ---- Xray (VLESS/VMESS/TROJAN/SHADOWSOCKS) ----
+# ---- Xray: pure local install (no remote dependencies) ----
 install_xray() {
-  log INFO "=== Installing Xray ==="
-  curl -fsSL "${REPO_BASE}/xray/ins-xray.sh" -o /tmp/ins-xray.sh
-  chmod +x /tmp/ins-xray.sh && bash /tmp/ins-xray.sh; rm -f /tmp/ins-xray.sh
-  log INFO "Xray done"
+  log INFO "=== Installing Xray (local) ==="
+  local xray_dir="${LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/lib}/../xray"
+  local t; t="$(mktemp)"
+  if [[ -f "${xray_dir}/ins-xray.sh" ]]; then
+    cp -f "${xray_dir}/ins-xray.sh" "$t" && bash "$t" && log INFO "Xray done"
+  else
+    curl -fsSL "${REPO_BASE}/xray/ins-xray.sh" -o "$t" && bash "$t" && log INFO "Xray done (remote)"
+  fi
+  rm -f "$t"
 }
 
-# ---- SSH over WebSocket ----
+# ---- SSH over WebSocket: pure local install (no remote dependencies) ----
 install_sshws() {
-  log INFO "=== Installing SSH WebSocket ==="
-  curl -fsSL "${REPO_BASE}/sshws/insshws.sh" -o /tmp/insshws.sh
-  chmod +x /tmp/insshws.sh && bash /tmp/insshws.sh; rm -f /tmp/insshws.sh
-  log INFO "SSH WebSocket done"
+  log INFO "=== Installing SSH WebSocket (local) ==="
+  local ws_dir="${LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/lib}/../sshws"
+  local t; t="$(mktemp)"
+  if [[ -f "${ws_dir}/insshws.sh" ]]; then
+    cp -f "${ws_dir}/insshws.sh" "$t" && bash "$t" && log INFO "SSH WS done"
+  else
+    curl -fsSL "${REPO_BASE}/sshws/insshws.sh" -o "$t" && bash "$t" && log INFO "SSH WS done (remote)"
+  fi
+  rm -f "$t"
 }
 
 # ---- SlowDNS (real DNS-over-TLS tunnel) ----
@@ -514,6 +530,19 @@ main() {
       rm -f "$tmp"
     fi
   fi
+
+  # Install local menu scripts to /usr/bin (replaces jubairbro's old menu)
+  if [[ -d "${lib_dir}" ]]; then
+    log INFO "Installing local menu scripts to /usr/bin/"
+    for f in "${lib_dir}"/*.sh; do
+      [[ -f "$f" ]] || continue
+      local bn; bn="$(basename "$f" .sh)"
+      install -m 755 "$f" "/usr/bin/${bn}" 2>/dev/null || cp -f "$f" "/usr/bin/${bn}" 2>/dev/null
+    done
+  fi
+
+  # Drop the old jubairbro menu command (in case it shadows our new usernew)
+  # We don't remove /usr/bin/menu; instead our local menu overwrites it later
 
   print_summary
 }
