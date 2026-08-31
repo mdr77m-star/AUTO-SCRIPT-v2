@@ -507,18 +507,27 @@ main() {
     log INFO "Cloning repo to /opt/auto-script (pinned commit)..."
     apt_update_once && install_packages git
 
-    # Hard-pinned commit SHA (update this when you push new code)
-    local PINNED_SHA="${AUTO_SCRIPT_PIN:-457f33b3abc5c4293528f1f29ed8d4eff26ac5bd}"
+    # Hard-pinned commit SHA (40 hex chars). Update this when you push new code.
+    local PINNED_SHA="${AUTO_SCRIPT_PIN:-7b6a68ecfa54d3c16fcf52241eae4f9334d4c33f}"
     local REPO_URL="https://github.com/mdr77m-star/AUTO-SCRIPT-v2.git"
 
+    # SECURITY: validate pinned SHA matches a 40-char hex string before use
+    if [[ ! "$PINNED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+      log FATAL "Invalid PINNED_SHA (not 40 hex chars): $PINNED_SHA - refusing to proceed"
+      exit 1
+    fi
+    log INFO "Pinned commit: $PINNED_SHA"
+
     # Clone, checkout pinned commit, verify it matches
-    git clone --depth 50 "$REPO_URL" /opt/auto-script 2>/dev/null || {
-      log WARN "Clone failed, falling back to wget downloads"
-    }
+    if ! git clone --depth 50 "$REPO_URL" /opt/auto-script 2>/dev/null; then
+      log FATAL "Clone failed - refusing to continue (no fallback to unverified code)"
+      exit 1
+    fi
     if [[ -d /opt/auto-script/.git ]]; then
       (cd /opt/auto-script && git fetch --depth 50 origin 2>/dev/null && git checkout "$PINNED_SHA" 2>/dev/null) || {
         log FATAL "Pinned commit checkout failed - refusing to run unverified code"
         rm -rf /opt/auto-script
+        exit 1
       }
       # Verify checkout matches the SHA we requested
       local actual_sha; actual_sha="$(cd /opt/auto-script && git rev-parse HEAD 2>/dev/null)"
